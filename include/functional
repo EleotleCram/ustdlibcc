@@ -30,6 +30,8 @@
 
 #include <new>
 
+namespace std{
+
 template<typename Signature>
 class function;
 
@@ -115,3 +117,5 @@ public:
 private:
 	function_base* impl;
 };
+
+} // namespace std
