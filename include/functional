@@ -32,6 +32,10 @@
 
 namespace std{
 
+#include <stddef.h>
+
+void* operator new(size_t, void* p) { return p; }
+
 template<typename Signature>
 class function;
 
@@ -44,35 +48,86 @@ class function<R(Args...)>
 
 		virtual R call(Args&... args) const = 0;
 
-		virtual function_base* clone() const = 0;
+		virtual function_base* clone(void*) const = 0;
+
+		virtual void destroy() { delete this; }
 	};
 
-	template<typename R2, typename F>
+	static constexpr size_t bufsize = sizeof(void*) * 2;
+
+	template<typename R2, typename F,
+					 bool = (sizeof(F) <= bufsize) && __is_trivially_copyable(F)>
 		struct function_impl : function_base
 		{
-			function_impl(F&& f)
+			function_impl(F& f)
 			: f(static_cast<F&&>(f)) { }
 
 			virtual R call(Args&... args) const
 			{ return f(static_cast<Args&&>(args)...); }
 
-			virtual function_base* clone() const
+			virtual function_base* clone(void*) const
 			{ return new function_impl(*this); }
+
+			static function_base* create(F& f, void*)
+			{ return new function_impl(f); }
 
 			F f;
 		};
 
 	template<typename F>
-		struct function_impl<void, F> : function_base
+		struct function_impl<void, F, false> : function_base
 		{
-			function_impl(F&& f)
+			function_impl(F& f)
 			: f(static_cast<F&&>(f)) { }
 
 			virtual void call(Args&... args) const
 			{ f(static_cast<Args&&>(args)...); }
 
-			virtual function_base* clone() const
+			virtual function_base* clone(void*) const
 			{ return new function_impl(*this); }
+
+			static function_base* create(F& f, void*)
+			{ return new function_impl(f); }
+
+			F f;
+		};
+
+	template<typename R2, typename F>
+		struct function_impl<R2, F, true> : function_base
+		{
+			function_impl(F& f)
+			: f(static_cast<F&&>(f)) { }
+
+			virtual R call(Args&... args) const
+			{ return f(static_cast<Args&&>(args)...); }
+
+			virtual function_base* clone(void* p) const
+			{ return ::new(p) function_impl(*this); }
+
+			virtual void destroy() { this->~function_impl(); }
+
+			static function_base* create(F& f, void* p)
+			{ return ::new(p) function_impl(f); }
+
+			F f;
+		};
+
+	template<typename F>
+		struct function_impl<void, F, true> : function_base
+		{
+			function_impl(F& f)
+			: f(static_cast<F&&>(f)) { }
+
+			virtual void call(Args&... args) const
+			{ f(static_cast<Args&&>(args)...); }
+
+			virtual function_base* clone(void* p) const
+			{ return ::new(p) function_impl(*this); }
+
+			virtual void destroy() { this->~function_impl(); }
+
+			static function_base* create(F& f, void* p)
+			{ return ::new(p) function_impl(f); }
 
 			F f;
 		};
@@ -81,21 +136,19 @@ class function<R(Args...)>
 public:
 	template<typename F>
 		function(F f)
-		: impl(new function_impl<R, F>(static_cast<F&&>(f))) { }
+		: impl(function_impl<R, F>::create(f, buf)) { }
 
-	function(const function& f) : impl(f.impl ? impl->clone() : nullptr) { }
+	function(const function& f) : impl(f.impl ? impl->clone(buf) : nullptr) { }
 
-	function(function&& f) : impl(f.impl) { f.impl = nullptr; }
-
-	~function() { delete impl; }
+	~function() { if (impl) impl->destroy(); }
 
 	function&
 	operator=(const function& f)
 	{
 		if (f.impl)
 		{
-			auto copy = impl->clone();
-			delete impl;
+			auto copy = impl->clone(buf);
+			impl->destroy();
 			impl = copy;
 		}
 		else
@@ -103,19 +156,17 @@ public:
 		return *this;
 	}
 
-	function&
-	operator=(function&& f)
-	{
-		delete impl;
-		impl = f.impl;
-		f.impl = nullptr;
-		return *this;
-	}
-
 	R operator()(Args... args) const { return impl->call(args...); }
 
 private:
 	function_base* impl;
+
+	union {
+		char buf[bufsize];
+		void* p;
+		void (*fp)();
+		void (function::*pmf)();
+	};
 };
 
 } // namespace std
