@@ -115,7 +115,7 @@ public:
 	R operator()(Args... args) const { return impl->call(args...); }
 
 private:
-	function_base* impl;
+	function_base* impl = nullptr;
 };
 
 } // namespace std
