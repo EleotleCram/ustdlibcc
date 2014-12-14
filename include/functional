@@ -94,7 +94,7 @@ public:
 	{
 		if (f.impl)
 		{
-			auto copy = impl->clone();
+			auto copy = f.impl->clone();
 			delete impl;
 			impl = copy;
 		}
