@@ -18,4 +18,16 @@ int main() {
 	std::function<void(int) > f2 = [&](int j) {i2 += j;};
 	f2(1);
 	printf("Answer: %d\n", i2);
+
+	int i3 = -1;
+	std::function<int() > f3 = [&]() {return i3 * i3;};
+	printf("Answer: %d\n", f3());
+
+	std::function<int() > f4;
+	f4 = f3;
+
+	int i5 = -1;
+	std::function<void() > f5 = [&]() {i5 = i3 + i3;};
+	f5();
+	printf("Answer: %d\n", i5);
 }
