@@ -83,6 +83,8 @@ public:
 		function(F f)
 		: impl(new function_impl<R, F>(static_cast<F&&>(f))) { }
 
+	function() { }
+
 	function(const function& f) : impl(f.impl ? impl->clone() : nullptr) { }
 
 	function(function&& f) : impl(f.impl) { f.impl = nullptr; }
